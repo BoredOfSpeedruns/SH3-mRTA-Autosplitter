@@ -13,67 +13,53 @@ state("sh3") {
 }
 
 init {
-  refreshRate = 100;
-  vars.ticking_puzzle = 0;
-  vars.should_tick = (Func<bool>) (() => {
-    if(current.state0 != 2) { return false; }
-    
-    //WORLD MODE
-    if(current.state1 == 5) {
+    refreshRate = 100;
+    vars.ticking_puzzle = false;
 
-      //EXPLORE 
-      if((0 == current.state2) || (1 == current.state2)) {
-        return (current.eventid == -1) && (0 == current.is_paused);
+    vars.Functions = new ExpandoObject();
+    var F = vars.Functions;
+
+    var state_values = new Dictionary<string , int>() {
+      { "World", 5 },
+      { "Inventory", 6 },
+      { "Background", 11}
+    };
+
+    F.shouldTick = (Func<bool>)(() => {
+        if(current.state0 != 2) { return false; }
+        if(current.state1 == state_values["World"]) { return F.inWorld(); }
+        if(current.state1 == state_values["Inventory"]) { return F.inInventory(); }
+        if(current.state1 == state_values["Background"]) { return F.inBackground(); }
+        return false;
+    });
+
+    F.inWorld = (Func<bool>)(() => {
+      var explore = (current.eventid == -1) && (0 == current.is_paused);
+      if(current.state2 < 2) {
+        return explore;
+      }
+      return (current.state3 == 7) || (current.state3 == 10);
+    });
+
+    F.inInventory = (Func<bool>)(() => {
+      if(current.state2 == 1 && current.state3 == 23) {
+          return (current.state4 == 2) || (current.state4 == 3);                    // Examine Book
       }
 
-      //TEXT BOX 
-      if(current.state2 == 2) {
-        return (current.state3 == 7) || (current.state3 == 10);
-      }
-    }
-    
-    //INVENTORY MODE 
-    if(current.state1 == 6) {
-      //TODO: Don't count menu open because there is a load?
-      //Original behavior is to count the load.
-
-      if(current.state2 == 1) {
-
-        //OPEN MENU
-        if(current.state3 == 2) {
-          //TODO: This is where logic goes for first menu, or to disable menu open entirely.
-        }
-
-        //EXAMINE BOOK
-        if(current.state3 == 23) {
-          return (current.state4 == 2) || (current.state4 == 3);
-        }
-      }
       return true;
-    }
+    });
 
-    //BACKGROUND MODE
-    if(current.state1 == 11) {
+    F.inBackground = (Func<bool>)(() => {
+      vars.ticking_puzzle = vars.prev.state1 != 11 ? false : vars.ticking_puzzle;   // Checking for new frame
 
-      //HACK: I test for the presence of a new frame, 
-      //  then compare IGT to determine whether a puzzle needs to tick.
-      // Original idea is from the old script.
-      if(vars.prev.state1 != 11) {
-        //Entering the puzzle
-        vars.ticking_puzzle = 0;
-      }
       if(vars.prev.counter != current.counter) {
-        if(vars.prev.igt == current.igt) {
-          if(vars.ticking_puzzle > 0) { vars.ticking_puzzle -= 1; }
-        } else {
-          vars.ticking_puzzle = 1;
-        }
+        vars.ticking_puzzle = vars.prev.igt == current.igt ? false : true;
       }
 
-      return (vars.ticking_puzzle != 0);
-    }
-    return false;
-  });
+      return vars.ticking_puzzle;
+    });
+
+    F.shouldTick();
 }
 
 update {
@@ -81,6 +67,5 @@ update {
 }
 
 isLoading { 
-  return !vars.should_tick();
+  return !vars.Functions.shouldTick();
 }
-
